@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/sashabaranov/go-openai"
@@ -54,6 +56,29 @@ func createFile(path, content string) error {
 
 	_, err = file.WriteString(content)
 	return err
+}
+
+func runCommand(command, workdir string, args []string) (string, string, int) {
+	cmd := exec.Command(command, args...)
+	if workdir != "" {
+		cmd.Dir = workdir
+	}
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+	return stdout.String(), stderr.String(), exitCode
 }
 
 func main() {
@@ -145,6 +170,35 @@ func main() {
 							"required": ["path","content"]
 						}`),
 			},
+		}, {
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name:        "run_command",
+				Description: "Execute system commands.",
+				Strict:      false,
+				Parameters: json.RawMessage(`{
+							"type":"object",
+							"properties": {
+								"command": {
+									"type":"string",
+									"description":"The system command to execute (e.g., 'ls', 'pwd', 'cat'). Do not include arguments here."
+								},
+								"workdir": {
+									"type":"string",
+									"description":"Optional working directory where the command should be executed (e.g., '/home/user')."
+								},
+								"args": {
+									"type":"array",
+									"items": {
+										"type":"string",
+										"description":"Arguments to pass to the command."		
+									},
+									"description":"A list of arguments for the command. Each argument should be a separate string (e.g., ['-l', '/tmp'])."
+								}
+							},
+							"required": ["command"]
+						}`),
+			},
 		},
 	}
 	for true {
@@ -216,6 +270,24 @@ func main() {
 						if err == nil {
 							result = "File created successfully."
 						}
+					case "run_command":
+						var args struct {
+							Command string   `json:"command"`
+							Args    []string `json:"args"`
+							Workdir string   `json:"workdir"`
+						}
+						json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+
+						out, errOut, exitCode := runCommand(args.Command, args.Workdir, args.Args)
+						resMap := map[string]interface{}{
+							"stdout":    out,
+							"stderr":    errOut,
+							"exit_code": exitCode,
+						}
+
+						b, _ := json.Marshal(resMap)
+
+						result = string(b)
 					}
 					if err != nil {
 						result = err.Error()
