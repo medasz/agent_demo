@@ -162,88 +162,75 @@ func main() {
 			Role:    openai.ChatMessageRoleUser,
 			Content: line,
 		})
-
-		resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-			Model:    "deepseek-chat",
-			Messages: messages,
-			Tools:    tools,
-		})
-		if err != nil {
-			log.Printf("CreateChatCompletion error: %v\n", err)
-			continue
-		}
-		aiResponse := resp.Choices[0].Message
-		messages = append(messages, aiResponse)
-
-		if aiResponse.ToolCalls != nil {
-			fmt.Println("Agent > 正在调用工具...")
-			for _, toolCall := range aiResponse.ToolCalls {
-				var result string
-				var err error
-
-				switch toolCall.Function.Name {
-				case "read_file":
-					var args struct {
-						Path string `json:"path"`
-					}
-					json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-					result, err = readFile(args.Path)
-				case "list_file":
-					var args struct {
-						Path string `json:"path"`
-					}
-					json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-					result, err = listFiles(args.Path)
-				case "edit_file":
-					var args struct {
-						Path string `json:"path"`
-						Old  string `json:"old"`
-						New  string `json:"new"`
-					}
-					json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-					err = editFile(args.Path, args.Old, args.New)
-					if err == nil {
-						result = "File edited successfully."
-					}
-
-				case "create_file":
-					var args struct {
-						Path    string `json:"path"`
-						Content string `json:"content"`
-					}
-					json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
-					err = createFile(args.Path, args.Content)
-					if err == nil {
-						result = "File created successfully."
-					}
-				}
-				if err != nil {
-					result = err.Error()
-				}
-				messages = append(messages, openai.ChatCompletionMessage{
-					Role:       openai.ChatMessageRoleTool,
-					Content:    result,
-					Name:       toolCall.Function.Name,
-					ToolCallID: toolCall.ID,
-				})
-			}
-
-			resp, err = client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+		for {
+			resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 				Model:    "deepseek-chat",
 				Messages: messages,
 				Tools:    tools,
 			})
-
 			if err != nil {
-				log.Printf("Tool Result ChatCompletion error: %v\n", err)
+				log.Printf("CreateChatCompletion error: %v\n", err)
 				continue
 			}
+			aiResponse := resp.Choices[0].Message
+			messages = append(messages, aiResponse)
 
-			fmt.Println("Agent > ", resp.Choices[0].Message.Content)
+			if aiResponse.ToolCalls != nil {
+				fmt.Println("Agent > 正在调用工具...")
+				for _, toolCall := range aiResponse.ToolCalls {
+					var result string
+					var err error
 
-			messages = append(messages, resp.Choices[0].Message)
-		} else {
-			fmt.Println("Agent > ", aiResponse.Content)
+					switch toolCall.Function.Name {
+					case "read_file":
+						var args struct {
+							Path string `json:"path"`
+						}
+						json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+						result, err = readFile(args.Path)
+					case "list_file":
+						var args struct {
+							Path string `json:"path"`
+						}
+						json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+						result, err = listFiles(args.Path)
+					case "edit_file":
+						var args struct {
+							Path string `json:"path"`
+							Old  string `json:"old"`
+							New  string `json:"new"`
+						}
+						json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+						err = editFile(args.Path, args.Old, args.New)
+						if err == nil {
+							result = "File edited successfully."
+						}
+
+					case "create_file":
+						var args struct {
+							Path    string `json:"path"`
+							Content string `json:"content"`
+						}
+						json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+						err = createFile(args.Path, args.Content)
+						if err == nil {
+							result = "File created successfully."
+						}
+					}
+					if err != nil {
+						result = err.Error()
+					}
+					messages = append(messages, openai.ChatCompletionMessage{
+						Role:       openai.ChatMessageRoleTool,
+						Content:    result,
+						Name:       toolCall.Function.Name,
+						ToolCallID: toolCall.ID,
+					})
+				}
+			} else {
+				fmt.Println("Agent > ", aiResponse.Content)
+				break
+			}
 		}
 	}
 }
