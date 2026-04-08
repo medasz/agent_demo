@@ -45,7 +45,7 @@ func editFile(path string, old, new string) error {
 
 func createFile(path, content string) error {
 	// 1. 创建文件
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE, 0644)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -64,6 +64,89 @@ func main() {
 	messages := []openai.ChatCompletionMessage{}
 	reader := bufio.NewReader(os.Stdin)
 
+	tools := []openai.Tool{
+		{
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name:        "read_file",
+				Description: "Reads the content of a file.",
+				Strict:      false,
+				Parameters: json.RawMessage(`{
+							"type":"object",
+							"properties": {
+								"path": {
+									"type":"string",
+									"description":"The path to the file to read"
+								}
+							},
+							"required": ["path"]
+						}`),
+			},
+		}, {
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name:        "list_file",
+				Description: "List files in a directory.",
+				Strict:      false,
+				Parameters: json.RawMessage(`{
+							"type":"object",
+							"properties": {
+								"path": {
+									"type":"string",
+									"description":"The directory path to list files from."
+								}
+							},
+							"required": ["path"]
+						}`),
+			},
+		}, {
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name:        "edit_file",
+				Description: "Edits a file by replacing a string.",
+				Strict:      false,
+				Parameters: json.RawMessage(`{
+							"type":"object",
+							"properties": {
+								"path": {
+									"type":"string",
+									"description":"The path to the file to edit"
+								},
+								"old": {
+									"type":"string",
+									"description":"The string to be replaced"
+								},
+								"new": {
+									"type":"string",
+									"description":"The new string to replace with"
+								}
+							},
+							"required": ["path","old","new"]
+						}`),
+			},
+		}, {
+			Type: openai.ToolTypeFunction,
+			Function: &openai.FunctionDefinition{
+				Name:        "create_file",
+				Description: "Create a file and overwrite the written content.",
+				Strict:      false,
+				Parameters: json.RawMessage(`{
+							"type":"object",
+							"properties": {
+								"path": {
+									"type":"string",
+									"description":"The path to the file to create or overwrite the written"
+								},
+								"content": {
+									"type":"string",
+									"description":"The written content"
+								}
+							},
+							"required": ["path","content"]
+						}`),
+			},
+		},
+	}
 	for true {
 		fmt.Print("You > ")
 		line, err := reader.ReadString('\n')
@@ -83,89 +166,7 @@ func main() {
 		resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 			Model:    "deepseek-chat",
 			Messages: messages,
-			Tools: []openai.Tool{
-				{
-					Type: openai.ToolTypeFunction,
-					Function: &openai.FunctionDefinition{
-						Name:        "read_file",
-						Description: "Reads the content of a file.",
-						Strict:      false,
-						Parameters: json.RawMessage(`{
-							"type":"object",
-							"properties": {
-								"path": {
-									"type":"string",
-									"description":"The path to the file to read"
-								}
-							},
-							"required": ["path"]
-						}`),
-					},
-				}, {
-					Type: openai.ToolTypeFunction,
-					Function: &openai.FunctionDefinition{
-						Name:        "list_file",
-						Description: "List files in a directory.",
-						Strict:      false,
-						Parameters: json.RawMessage(`{
-							"type":"object",
-							"properties": {
-								"path": {
-									"type":"string",
-									"description":"The directory path to list files from."
-								}
-							},
-							"required": ["path"]
-						}`),
-					},
-				}, {
-					Type: openai.ToolTypeFunction,
-					Function: &openai.FunctionDefinition{
-						Name:        "edit_file",
-						Description: "Edits a file by replacing a string.",
-						Strict:      false,
-						Parameters: json.RawMessage(`{
-							"type":"object",
-							"properties": {
-								"path": {
-									"type":"string",
-									"description":"The path to the file to edit"
-								},
-								"old": {
-									"type":"string",
-									"description":"The string to be replaced"
-								},
-								"new": {
-									"type":"string",
-									"description":"The new string to replace with"
-								}
-							},
-							"required": ["path","old","new"]
-						}`),
-					},
-				}, {
-					Type: openai.ToolTypeFunction,
-					Function: &openai.FunctionDefinition{
-						Name:        "crate_file",
-						Description: "Create a file and overwrite the written content.",
-						Strict:      false,
-						Parameters: json.RawMessage(`{
-							"type":"object",
-							"properties": {
-								"path": {
-									"type":"string",
-									"description":"The path to the file to create or overwrite the written"
-								},
-								"content": {
-									"type":"string",
-									"description":"The written content"
-								}
-							},
-							"required": ["path","content"]
-						}`),
-					},
-				},
-			},
+			Tools:    tools,
 		})
 		if err != nil {
 			log.Printf("CreateChatCompletion error: %v\n", err)
@@ -205,7 +206,7 @@ func main() {
 						result = "File edited successfully."
 					}
 
-				case "crate_file":
+				case "create_file":
 					var args struct {
 						Path    string `json:"path"`
 						Content string `json:"content"`
@@ -230,6 +231,7 @@ func main() {
 			resp, err = client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 				Model:    "deepseek-chat",
 				Messages: messages,
+				Tools:    tools,
 			})
 
 			if err != nil {
