@@ -85,7 +85,7 @@ func main() {
 	config := openai.DefaultConfig(os.Getenv("API_KEY"))
 	config.BaseURL = os.Getenv("BASE_URL")
 	client := openai.NewClientWithConfig(config)
-
+	modelName := os.Getenv("MODEL_NAME")
 	messages := []openai.ChatCompletionMessage{}
 	reader := bufio.NewReader(os.Stdin)
 
@@ -218,7 +218,7 @@ func main() {
 		})
 		for {
 			resp, err := client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-				Model:    "deepseek-chat",
+				Model:    modelName,
 				Messages: messages,
 				Tools:    tools,
 			})
