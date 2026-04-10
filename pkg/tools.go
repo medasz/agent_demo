@@ -13,7 +13,7 @@ import (
 
 var Tools []openai.Tool
 
-func Init() {
+func init() {
 	Tools = []openai.Tool{
 		{
 			Type: openai.ToolTypeFunction,
