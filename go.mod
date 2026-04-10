@@ -2,4 +2,4 @@ module agent_demo
 
 go 1.25.6
 
-require github.com/sashabaranov/go-openai v1.41.2 // indirect
+require github.com/sashabaranov/go-openai v1.41.2
