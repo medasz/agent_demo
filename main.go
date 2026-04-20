@@ -1,6 +1,8 @@
 package main
 
 import (
+	"agent_demo/internal/config"
+	"agent_demo/internal/llm"
 	"agent_demo/pkg"
 	"bufio"
 	"context"
@@ -14,10 +16,12 @@ import (
 )
 
 func main() {
-	config := openai.DefaultConfig(os.Getenv("API_KEY"))
-	config.BaseURL = os.Getenv("BASE_URL")
-	client := openai.NewClientWithConfig(config)
-	modelName := os.Getenv("MODEL_NAME")
+	conf, err := config.Load()
+	if err != nil {
+		log.Fatalf("load config: %v", err)
+	}
+
+	client := llm.NewClient(conf.APIKey, conf.BaseURL, conf.ModelName)
 	messages := []openai.ChatCompletionMessage{}
 	reader := bufio.NewReader(os.Stdin)
 
@@ -37,73 +41,19 @@ func main() {
 			Content: line,
 		})
 		for {
-			stream, err := client.CreateChatCompletionStream(context.Background(), openai.ChatCompletionRequest{
-				Model:    modelName,
-				Messages: messages,
-				Tools:    pkg.Tools,
+			aiResponse, err := client.CompleteStream(context.Background(), messages, pkg.Tools, func(content string) {
+				fmt.Print(content)
 			})
 			if err != nil {
 				log.Printf("CreateChatCompletion error: %v\n", err)
 				continue
 			}
+			fmt.Println()
 
-			var fullContent strings.Builder
-			var toolCalls []openai.ToolCall
-
-			//流式输出
-			for {
-				response, err := stream.Recv()
-				if err != nil {
-					break
-				}
-
-				delta := response.Choices[0].Delta
-
-				// 1. 处理文字内容
-				if delta.Content != "" {
-					fmt.Print(delta.Content)
-					fullContent.WriteString(delta.Content)
-				}
-
-				// 2. 处理工具调用
-				for _, tcDelta := range delta.ToolCalls {
-					if tcDelta.Index == nil {
-						continue
-					}
-					idx := *tcDelta.Index
-
-					for len(toolCalls) <= idx {
-						toolCalls = append(toolCalls, openai.ToolCall{
-							Index: &idx,
-							ID:    tcDelta.ID,
-						})
-					}
-
-					if tcDelta.Type != "" {
-						toolCalls[idx].Type = tcDelta.Type
-					}
-
-					if tcDelta.Function.Name != "" {
-						toolCalls[idx].Function.Name = tcDelta.Function.Name
-					}
-					if tcDelta.Function.Arguments != "" {
-						toolCalls[idx].Function.Arguments += tcDelta.Function.Arguments
-					}
-				}
-			}
-			fmt.Println() // 换行
-
-			aiResponse := openai.ChatCompletionMessage{
-				Role:    openai.ChatMessageRoleAssistant,
-				Content: fullContent.String(),
-			}
-			if len(toolCalls) > 0 {
-				aiResponse.ToolCalls = toolCalls
-			}
 			messages = append(messages, aiResponse)
 
 			if aiResponse.ToolCalls != nil {
-				fmt.Println("Agent > 正在调用工具...")
+				fmt.Println("Agent > calling tools...")
 				for _, toolCall := range aiResponse.ToolCalls {
 					var result string
 					var err error
@@ -173,7 +123,6 @@ func main() {
 					})
 				}
 			} else {
-				//fmt.Println("Agent > ", aiResponse.Content)
 				break
 			}
 		}
