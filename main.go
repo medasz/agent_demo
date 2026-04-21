@@ -4,7 +4,6 @@ import (
 	"agent_demo/internal/config"
 	"agent_demo/internal/llm"
 	"agent_demo/internal/tool"
-	"agent_demo/pkg"
 	"bufio"
 	"context"
 	"fmt"
@@ -20,6 +19,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
+	registry := tool.NewRegistry()
+	tools := registry.Definitions()
 	executor := tool.Executor{}
 	client := llm.NewClient(conf.APIKey, conf.BaseURL, conf.ModelName)
 	messages := []openai.ChatCompletionMessage{}
@@ -41,7 +42,7 @@ func main() {
 			Content: line,
 		})
 		for {
-			aiResponse, err := client.CompleteStream(context.Background(), messages, pkg.Tools, func(content string) {
+			aiResponse, err := client.CompleteStream(context.Background(), messages, tools, func(content string) {
 				fmt.Print(content)
 			})
 			if err != nil {
