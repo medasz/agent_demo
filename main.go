@@ -3,6 +3,7 @@ package main
 import (
 	"agent_demo/internal/config"
 	"agent_demo/internal/llm"
+	"agent_demo/internal/session"
 	"agent_demo/internal/tool"
 	"bufio"
 	"context"
@@ -23,7 +24,7 @@ func main() {
 	tools := registry.Definitions()
 	executor := tool.Executor{}
 	client := llm.NewClient(conf.APIKey, conf.BaseURL, conf.ModelName)
-	messages := []openai.ChatCompletionMessage{}
+	sessioner := session.NewSession()
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
@@ -36,13 +37,12 @@ func main() {
 			fmt.Println("Bye!")
 			break
 		}
-
-		messages = append(messages, openai.ChatCompletionMessage{
+		sessioner.Append(openai.ChatCompletionMessage{
 			Role:    openai.ChatMessageRoleUser,
 			Content: line,
 		})
 		for {
-			aiResponse, err := client.CompleteStream(context.Background(), messages, tools, func(content string) {
+			aiResponse, err := client.CompleteStream(context.Background(), sessioner.Messages(), tools, func(content string) {
 				fmt.Print(content)
 			})
 			if err != nil {
@@ -51,7 +51,7 @@ func main() {
 			}
 			fmt.Println()
 
-			messages = append(messages, aiResponse)
+			sessioner.Append(aiResponse)
 
 			if aiResponse.ToolCalls != nil {
 				fmt.Println("Agent > calling tools...")
@@ -60,7 +60,7 @@ func main() {
 					if err != nil {
 						result = err.Error()
 					}
-					messages = append(messages, openai.ChatCompletionMessage{
+					sessioner.Append(openai.ChatCompletionMessage{
 						Role:       openai.ChatMessageRoleTool,
 						Content:    result,
 						Name:       toolCall.Function.Name,
