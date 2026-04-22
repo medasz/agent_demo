@@ -9,7 +9,7 @@ import (
 	"github.com/sashabaranov/go-openai"
 )
 
-const maxToolIterations = 8
+const maxToolIterations = 20
 
 type LLMClient interface {
 	CompleteStream(
