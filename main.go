@@ -1,6 +1,7 @@
 package main
 
 import (
+	"agent_demo/internal/agent"
 	"agent_demo/internal/config"
 	"agent_demo/internal/llm"
 	"agent_demo/internal/session"
@@ -11,8 +12,6 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"github.com/sashabaranov/go-openai"
 )
 
 func main() {
@@ -26,7 +25,7 @@ func main() {
 	client := llm.NewClient(conf.APIKey, conf.BaseURL, conf.ModelName)
 	sessioner := session.NewSession()
 	reader := bufio.NewReader(os.Stdin)
-
+	agenter := agent.New(client, &executor, sessioner, tools)
 	for {
 		fmt.Print("You > ")
 		line, err := reader.ReadString('\n')
@@ -37,39 +36,13 @@ func main() {
 			fmt.Println("Bye!")
 			break
 		}
-		sessioner.Append(openai.ChatCompletionMessage{
-			Role:    openai.ChatMessageRoleUser,
-			Content: line,
+		_, err = agenter.Run(context.Background(), line, func(content string) {
+			fmt.Print(content)
 		})
-		for {
-			aiResponse, err := client.CompleteStream(context.Background(), sessioner.Messages(), tools, func(content string) {
-				fmt.Print(content)
-			})
-			if err != nil {
-				log.Printf("CreateChatCompletion error: %v\n", err)
-				continue
-			}
-			fmt.Println()
-
-			sessioner.Append(aiResponse)
-
-			if aiResponse.ToolCalls != nil {
-				fmt.Println("Agent > calling tools...")
-				for _, toolCall := range aiResponse.ToolCalls {
-					result, err := executor.Execute(context.Background(), toolCall.Function.Name, toolCall.Function.Arguments)
-					if err != nil {
-						result = err.Error()
-					}
-					sessioner.Append(openai.ChatCompletionMessage{
-						Role:       openai.ChatMessageRoleTool,
-						Content:    result,
-						Name:       toolCall.Function.Name,
-						ToolCallID: toolCall.ID,
-					})
-				}
-			} else {
-				break
-			}
+		if err != nil {
+			log.Printf("agent run: %v\n", err)
+			continue
 		}
+		fmt.Println()
 	}
 }
