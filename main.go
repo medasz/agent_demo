@@ -21,11 +21,10 @@ func main() {
 	}
 	registry := tool.NewRegistry()
 	tools := registry.Definitions()
-	executor := tool.Executor{}
 	client := llm.NewClient(conf.APIKey, conf.BaseURL, conf.ModelName)
 	sessioner := session.NewSession()
 	reader := bufio.NewReader(os.Stdin)
-	agenter := agent.New(client, &executor, sessioner, tools)
+	agenter := agent.New(client, registry, sessioner, tools)
 	for {
 		fmt.Print("You > ")
 		line, err := reader.ReadString('\n')

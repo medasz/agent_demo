@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/sashabaranov/go-openai"
@@ -20,6 +21,10 @@ func (r *Registry) Definitions() []openai.Tool {
 	return append([]openai.Tool(nil), r.tools...)
 }
 
+func (r *Registry) Execute(ctx context.Context, name, argsJSON string) (string, error) {
+	e := Executor{}
+	return e.Execute(ctx, name, argsJSON)
+}
 func defaultTools() []openai.Tool {
 	return []openai.Tool{
 		{
