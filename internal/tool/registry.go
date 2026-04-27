@@ -3,27 +3,44 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/sashabaranov/go-openai"
 )
 
 type Registry struct {
-	tools []openai.Tool
+	definitions []openai.Tool
+	tools       map[string]Tool
 }
 
 func NewRegistry() *Registry {
-	return &Registry{
-		tools: defaultTools(),
+	registry := &Registry{
+		definitions: defaultTools(),
+		tools:       make(map[string]Tool),
 	}
+
+	registry.Register(&ReadFileTool{})
+	registry.Register(&ListFileTool{})
+	registry.Register(&CreateFileTool{})
+	registry.Register(&EditFileTool{})
+	registry.Register(&RunCommandTool{})
+
+	return registry
+}
+
+func (r *Registry) Register(tool Tool) {
+	r.tools[tool.Name()] = tool
 }
 
 func (r *Registry) Definitions() []openai.Tool {
-	return append([]openai.Tool(nil), r.tools...)
+	return append([]openai.Tool(nil), r.definitions...)
 }
 
 func (r *Registry) Execute(ctx context.Context, name, argsJSON string) (string, error) {
-	e := Executor{}
-	return e.Execute(ctx, name, argsJSON)
+	if tool, ok := r.tools[name]; ok {
+		return tool.Execute(ctx, argsJSON)
+	}
+	return "", fmt.Errorf("unknown tool: %s", name)
 }
 func defaultTools() []openai.Tool {
 	return []openai.Tool{

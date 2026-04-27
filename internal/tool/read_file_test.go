@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestExecutorReadFile(t *testing.T) {
+func TestReadFileToolExecute(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.txt")
 	if err := os.WriteFile(path, []byte("hello"), 0644); err != nil {
@@ -21,8 +21,8 @@ func TestExecutorReadFile(t *testing.T) {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
-	executor := Executor{}
-	result, err := executor.Execute(context.Background(), "read_file", string(args))
+	tool := &ReadFileTool{}
+	result, err := tool.Execute(context.Background(), string(args))
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)
 	}
@@ -31,16 +31,17 @@ func TestExecutorReadFile(t *testing.T) {
 	}
 }
 
-func TestExecutorUnknownTool(t *testing.T) {
-	executor := Executor{}
-	result, err := executor.Execute(context.Background(), "unknown_tool", `{}`)
+func TestReadFileToolExecuteInvalidArguments(t *testing.T) {
+	tool := &ReadFileTool{}
+
+	result, err := tool.Execute(context.Background(), `{"path":`)
 	if err == nil {
-		t.Fatal("Execute() error = nil, want unknown tool error")
+		t.Fatal("Execute() error = nil, want invalid arguments error")
 	}
 	if result != "" {
 		t.Fatalf("Execute() result = %q, want empty result", result)
 	}
-	if !strings.Contains(err.Error(), "unknown tool") {
-		t.Fatalf("Execute() error = %q, want unknown tool error", err)
+	if !strings.Contains(err.Error(), "invalid arguments for read_file") {
+		t.Fatalf("Execute() error = %q, want invalid arguments error", err)
 	}
 }
