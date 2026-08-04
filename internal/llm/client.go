@@ -41,6 +41,7 @@ func (c *Client) CompleteStream(
 	}
 
 	var fullContent strings.Builder
+	var reasoningContent strings.Builder
 	var toolCalls []openai.ToolCall
 
 	for {
@@ -59,6 +60,9 @@ func (c *Client) CompleteStream(
 		if delta.Content != "" {
 			onContent(delta.Content)
 			fullContent.WriteString(delta.Content)
+		}
+		if delta.ReasoningContent != "" {
+			reasoningContent.WriteString(delta.ReasoningContent)
 		}
 
 		for _, tcDelta := range delta.ToolCalls {
@@ -87,8 +91,9 @@ func (c *Client) CompleteStream(
 	}
 
 	message := openai.ChatCompletionMessage{
-		Role:    openai.ChatMessageRoleAssistant,
-		Content: fullContent.String(),
+		Role:             openai.ChatMessageRoleAssistant,
+		Content:          fullContent.String(),
+		ReasoningContent: reasoningContent.String(),
 	}
 	if len(toolCalls) > 0 {
 		message.ToolCalls = toolCalls
